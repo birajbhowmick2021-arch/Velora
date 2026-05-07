@@ -89,12 +89,12 @@
   @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 
   .bottom-nav{position:fixed;bottom:0;left:0;right:0;background:rgba(15,15,15,0.95);backdrop-filter:blur(10px);border-top:1px solid var(--border-color);display:flex;align-items:center;justify-content:space-around;padding:8px 0 calc(8px + env(safe-area-inset-bottom));border-radius:20px 20px 0 0;z-index:200;flex-shrink:0;}
-  .nav-btn{background:none;border:none;color:var(--text-secondary);font-size:1.2rem;cursor:pointer;padding:6px 16px;display:flex;flex-direction:column;align-items:center;gap:3px;position:relative;transition:var(--transition);}
+  .nav-btn{background:none;border:none;color:var(--text-secondary);font-size:1.2rem;cursor:pointer;padding:6px 8px;display:flex;flex-direction:column;align-items:center;gap:3px;position:relative;transition:var(--transition);}
   .nav-btn:hover{color:var(--text-light);}
   .nav-btn.active{color:var(--primary-green);transform:scale(1.1);}
-  .nav-btn span{font-size:.6rem;font-family:'Poppins',sans-serif;}
+  .nav-btn span{font-size:.58rem;font-family:'Poppins',sans-serif;}
   .nav-btn .badge{position:absolute;top:-4px;right:6px;background:#ef4444;color:#fff;font-size:.6rem;width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700; border:2px solid var(--black-main);}
-  .nav-upload-btn{background:linear-gradient(135deg,var(--primary-green),var(--accent-green));color:#fff;width:52px;height:52px;border-radius:50%;border:none;font-size:1.3rem;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(34,197,94,.45);transform:translateY(-10px);transition:var(--transition);}
+  .nav-upload-btn{background:linear-gradient(135deg,var(--primary-green),var(--accent-green));color:#fff;width:52px;height:52px;border-radius:50%;border:none;font-size:1.3rem;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(34,197,94,.45);transform:translateY(-10px);transition:var(--transition); flex-shrink:0;}
   .nav-upload-btn:hover{box-shadow:0 6px 25px rgba(34,197,94,.6); transform:translateY(-12px);}
   .nav-upload-btn:active{transform:translateY(-8px) scale(.95);}
 
@@ -465,8 +465,8 @@
       <div class="profile-header">
         <div class="profile-pic-wrap" id="profile-pic-wrap">
           <img id="profile-pic" src="" alt="avatar"/>
-          <input type="file" id="profile-pic-input" accept="image/*" style="display:none"/>
         </div>
+        <input type="file" id="profile-pic-input" accept="image/*" style="display:none"/>
         <div class="profile-username" id="profile-username-display">Loading...</div>
         <div class="profile-meta-info" id="profile-meta-display"></div>
         <div class="profile-bio" id="profile-bio-display"></div>
@@ -1174,14 +1174,12 @@ window.handleNotifClick = async (notifId, type, postId, fromUid) => {
     if (postId && postId !== 'undefined' && postId !== 'null') { 
         window.openSinglePost(postId); 
     } else if (type === 'story_react') { 
-        // User clicked a story reaction notification, open their own story viewer logic
-        // Ideally we should open the exact story or viewers list, but opening their latest story works as a fallback
         const myIdx = currentStoriesArray.findIndex(s => s.uid === currentUser.uid);
         if(myIdx !== -1) playStory(myIdx);
     } else if (type === 'friend_request' || type === 'friend_accept') { 
         window.openOtherProfile(fromUid); 
     } else if (type === 'chat') { 
-        window.openChatFromNotif(fromUid); 
+        if(typeof window.openChatFromNotif === 'function') window.openChatFromNotif(fromUid); 
     }
 };
 
@@ -1224,9 +1222,12 @@ function loadActivity() {
       let cursorStyle = 'pointer';
       let clickAction = `onclick="window.handleNotifClick('${n.id}', '${n.type}', '${n.postId || ''}', '${n.fromUid || ''}')"`;
 
+      let icon = 'bell';
+      if(n.type === 'friend_request') icon = 'user-plus';
+
       return `
       <div class="activity-item ${n.read ? '' : 'unread'}" style="cursor:${cursorStyle};" ${clickAction}>
-        <div class="activity-icon"><i class="fa-solid fa-${n.type === 'friend_request' ? 'user-plus' : 'bell'}"></i></div>
+        <div class="activity-icon"><i class="fa-solid fa-${icon}"></i></div>
         <div style="flex:1">
           <div class="activity-text">${n.text}</div>
           <div class="activity-time">${formatTime(n.timestamp)}</div>
@@ -1869,7 +1870,8 @@ window.deleteCmt = async (pid, cid) => {
     }
 };
 
-window.editCmt = (pid, cid, oldText) => {
+window.editCmt = (pid, cid, encodedText) => {
+    const oldText = decodeURIComponent(encodedText);
     const inputs = document.querySelectorAll(`#cmt-input-${pid}`);
     inputs.forEach(input => {
         if(input.offsetParent !== null) { 
@@ -1882,14 +1884,14 @@ window.editCmt = (pid, cid, oldText) => {
 
 function renderComments(cmts, pid) {
     return cmts.map(c => {
-        const safeText = encodeURIComponent(c.text);
+        const safeText = encodeURIComponent(c.text || '').replace(/'/g, "%27");
         let actions = `
             <span class="comment-action-btn ${c.likes?.[currentUser?.uid]?'liked':''}" onclick="toggleCmtLike('${pid}','${c.id}')">${c.likes?.[currentUser?.uid]?'❤️': 'Like'} ${(Object.keys(c.likes||{}).length)||''}</span>
-            <span class="comment-action-btn" onclick="prepCmtReply('${pid}','${c.username}', decodeURIComponent('${safeText}'))">Reply</span>
+            <span class="comment-action-btn" onclick="prepCmtReply('${pid}','${(c.username||'User').replace(/'/g, "\\'")}', '${safeText}', '${c.uid}')">Reply</span>
         `;
         if (c.uid === currentUser?.uid) {
             actions += `
-            <span class="comment-action-btn" onclick="window.editCmt('${pid}', '${c.id}', decodeURIComponent('${safeText}'))" style="margin-left:auto;"><i class="fa-solid fa-pen"></i></span>
+            <span class="comment-action-btn" onclick="window.editCmt('${pid}', '${c.id}', '${safeText}')" style="margin-left:auto;"><i class="fa-solid fa-pen"></i></span>
             <span class="comment-action-btn" onclick="window.deleteCmt('${pid}', '${c.id}')"><i class="fa-solid fa-trash"></i></span>
             `;
         }
@@ -1909,7 +1911,8 @@ function renderComments(cmts, pid) {
 
 window.toggleCmtLike = async (pid, cid) => { if(!currentUser) return; const r = ref(db, `posts/${pid}/comments/${cid}/likes/${currentUser.uid}`); const s = await get(r); if(s.exists()) remove(r); else set(r, true); };
 
-window.prepCmtReply = (pid, name, text) => { 
+window.prepCmtReply = (pid, name, encodedText, uid) => { 
+    const text = decodeURIComponent(encodedText);
     document.querySelectorAll(`#cmt-reply-context-${pid}`).forEach(el => el.style.display='block');
     document.querySelectorAll(`#cmt-reply-name-${pid}`).forEach(el => el.textContent=name);
     document.querySelectorAll(`#cmt-reply-text-${pid}`).forEach(el => el.innerHTML=window.parseMentions(text));
@@ -1919,6 +1922,7 @@ window.prepCmtReply = (pid, name, text) => {
         if(inputs[i].offsetParent !== null) {
             inputs[i].focus();
             inputs[i].dataset.replyTo = name;
+            if (uid) inputs[i].dataset.replyToUid = uid;
             break;
         }
     }
@@ -1997,6 +2001,7 @@ function bindPostInteractions(card, post) {
     const uData = await get(ref(db, `users/${currentUser.uid}`)).then(s=>s.val());
     
     const replyName = input.dataset.replyTo; delete input.dataset.replyTo; 
+    const replyUid = input.dataset.replyToUid; delete input.dataset.replyToUid;
     const replyContext = card.querySelector(`#cmt-reply-context-${post.id}`);
     if(replyContext) replyContext.style.display='none';
     
@@ -2005,7 +2010,12 @@ function bindPostInteractions(card, post) {
     const cmtData = { text, uid: currentUser.uid, username: uData.username, photo: uData.photo, timestamp: Date.now() };
     await push(ref(db, `posts/${post.id}/comments`), cmtData);
     
-    if(post.uid !== currentUser.uid) window.sendNotif(post.uid, post.id, 'comment', `commented: ${text}`);
+    if(post.uid !== currentUser.uid && post.uid !== replyUid) {
+        window.sendNotif(post.uid, post.id, 'comment', `commented: ${text}`);
+    }
+    if(replyUid && replyUid !== currentUser.uid) {
+        window.sendNotif(replyUid, post.id, 'reply', `replied to your comment.`);
+    }
 
     const mentions = text.match(/@([A-Za-z0-9_.]+)/g);
     if(mentions) {
@@ -2174,6 +2184,16 @@ document.getElementById('edit-cover-input').addEventListener('change', async (e)
     await update(ref(db, `users/${currentUser.uid}`), { cover: b64 }); document.getElementById('profile-cover').src = b64; showToast('Cover updated!');
 });
 
+document.getElementById('profile-pic-input').addEventListener('change', async (e) => {
+    if(!e.target.files[0]) return; 
+    const b64 = await processImage(e.target.files[0], 600, 0.7);
+    await update(ref(db, `users/${currentUser.uid}`), { photo: b64 }); 
+    document.getElementById('profile-pic').src = b64; 
+    showToast('Profile picture updated!');
+    e.target.value = ''; 
+    loadProfile();
+});
+
 document.getElementById('save-profile-btn').addEventListener('click', async () => {
   const user = document.getElementById('edit-username-input').value.trim(); const bio = document.getElementById('edit-bio-input').value.trim(); const loc = document.getElementById('edit-location-input').value.trim(); const web = document.getElementById('edit-website-input').value.trim();
   if (!user) { showToast('Username required'); return; }
@@ -2186,7 +2206,6 @@ document.getElementById('my-saved-btn').addEventListener('click', async () => {
     const cont = document.getElementById('saved-posts-container'); 
     cont.innerHTML = '<div class="spinner"></div>';
     
-    // Fetch directly from DB for 100% accuracy
     const sSnap = await get(ref(db, `saved_posts/${currentUser.uid}`));
     const sData = sSnap.val() || {};
     const keys = Object.keys(sData); 
@@ -2227,6 +2246,21 @@ window.openOtherProfile = async (uid) => {
   
   window.currentOtherProfileUid = uid; 
   const overlay = document.getElementById('other-profile-overlay'); overlay.classList.add('open');
+
+  get(ref(db, `users/${currentUser.uid}`)).then(uSnap => {
+      const viewerData = uSnap.val() || {};
+      const viewRef = ref(db, `profile_views/${uid}/${currentUser.uid}`);
+      get(viewRef).then(vSnap => {
+          let vCount = vSnap.exists() ? (vSnap.val().count || 0) + 1 : 1;
+          set(viewRef, {
+              uid: currentUser.uid,
+              username: viewerData.username || 'User',
+              photo: viewerData.photo || defaultAvatar(currentUser.uid),
+              timestamp: Date.now(),
+              count: vCount
+          });
+      });
+  });
   
   const uSnap = await get(ref(db, `users/${uid}`)); const uData = uSnap.val() || {};
   document.getElementById('other-profile-pic').src = uData.photo || defaultAvatar(uid);
@@ -2494,7 +2528,7 @@ document.getElementById('story-reply-send').addEventListener('click', async () =
     const story = currentStoriesArray[activeStoryIndex];
     if(!text || !story || !currentUser) return;
     
-    const cid = [currentUser.uid, story.uid].sort().join('_');
+    const cid =[currentUser.uid, story.uid].sort().join('_');
     const uData = await get(ref(db, `users/${currentUser.uid}`)).then(s=>s.val()||{});
     
     const msgData = {
